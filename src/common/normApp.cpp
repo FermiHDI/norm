@@ -6,6 +6,8 @@
 // the threaded NORM API code.  So this should _not_ be used as a NORM
 // programming example!!!!
 
+#include <random>
+#include <cstdint>
 #include "protokit.h"
 #include "normSession.h"
 #include "normPostProcess.h"
@@ -942,9 +944,14 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }      
     else if (!strncmp("ackingNodes", cmd, len))
     {
-        size_t length = strlen(val);
-        if (NULL != acking_node_list)
-            length += strlen(acking_node_list) + 1;
+        size_t valLen = strlen(val);
+        size_t oldLen = (NULL != acking_node_list) ? strlen(acking_node_list) : 0;
+        if (valLen > (SIZE_MAX / 2) || oldLen > (SIZE_MAX / 2))
+        {
+            PLOG(PL_FATAL, "NormApp::OnCommand(ackingNodes) error: list too long\n");
+            return false;
+        }
+        size_t length = valLen + ((NULL != acking_node_list) ? (oldLen + 1) : 0);
         char* tempString = new char[length + 1];
         if (NULL == tempString)
         {
@@ -953,16 +960,16 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
         }
         if (NULL != acking_node_list)
         {
-            strcpy(tempString, acking_node_list);
-            strcat(tempString, ",");
+            memcpy(tempString, acking_node_list, oldLen);
+            tempString[oldLen] = ',';
             delete[] acking_node_list;
+            memcpy(tempString + oldLen + 1, val, valLen + 1);
         }
         else
         {
-            tempString[0] = '\0';
+            memcpy(tempString, val, valLen + 1);
         }
         acking_node_list = tempString;
-        strcat(acking_node_list, val);
         if (NULL != session) return AddAckingNodes(acking_node_list);
     }    
     else if (!strncmp("ackflush", cmd, len))
@@ -2312,7 +2319,10 @@ bool NormApp::OnStartup(int argc, const char*const* argv)
         
         if (msg_test || input || !tx_file_list.IsEmpty())
         {
-            NormObjectId baseId = (unsigned short)(rand() * (65535.0/ (double)RAND_MAX));
+            // A random starting object id, from the platform's entropy source.
+            std::random_device rd;
+            std::uniform_int_distribution<unsigned int> dist(0, 0xffff);
+            NormObjectId baseId = (unsigned short)dist(rd);
             session->SenderSetBaseObjectId(baseId);
             session->SetCongestionControl(cc_enable);
             session->SetBackoffFactor(backoff_factor);

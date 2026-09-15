@@ -1,4 +1,5 @@
 #define _NORM_API_BUILD	// force 'dllexport' in "normApi.h"
+#include <random>
 #include "normApi.h"
 #include "normSession.h"
 
@@ -1530,10 +1531,12 @@ double NormGetReportInterval(NormSessionHandle sessionHandle)
 NORM_API_LINKAGE
 NormSessionId NormGetRandomSessionId()
 {
-    ProtoTime currentTime;
-    currentTime.GetCurrentTime();
-    srand((unsigned int)currentTime.usec());  // seed random number generator
-    return (NormSessionId)rand();
+    // The session id tells concurrent sessions apart, so take it from the
+    // platform's entropy source rather than rand() seeded with the clock's
+    // microseconds, which two senders started together can share.
+    std::random_device rd;
+    std::uniform_int_distribution<unsigned int> dist(0, 0xffff);
+    return (NormSessionId)dist(rd);
 }  // end NormGetRandomSessionId()
 
 NORM_API_LINKAGE

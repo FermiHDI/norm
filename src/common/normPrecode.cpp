@@ -601,10 +601,9 @@ bool NormPrecodeApp::Encode()
         char* ptr2 = strrchr(outFileName, '.');
         if (NULL != ptr2) *ptr2 = '_';
         // Append ".npc" suffix
-        if (strlen(outFileName) < (PATH_MAX - 4))
-            strcat(outFileName, ".npc");
-        else
-            strcpy(outFileName + PATH_MAX - 4, ".npc");
+        size_t baseLen = strlen(outFileName);
+        if (baseLen > (PATH_MAX - 4)) baseLen = PATH_MAX - 4;
+        memcpy(outFileName + baseLen, ".npc", 5);  // bounded: baseLen + 4 + NUL <= PATH_MAX + 1
         if (!out_file.Open(outFileName,  O_WRONLY | O_CREAT | O_TRUNC))
         {
             PLOG(PL_FATAL, "npc: error opening output file: %s\n", GetErrorString());

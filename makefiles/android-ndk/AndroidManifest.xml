@@ -5,4 +5,10 @@
       android:versionName="1.0">
     <uses-sdk android:minSdkVersion="14"
               android:targetSdkVersion="23"/>
+    <!-- A library: no user data to back up, and NORM speaks UDP, so nothing
+         here needs cleartext HTTP. Declaring both keeps an app that merges this
+         manifest from inheriting the permissive defaults. -->
+    <application android:allowBackup="false"
+                 android:fullBackupContent="false"
+                 android:usesCleartextTraffic="false" />
 </manifest>

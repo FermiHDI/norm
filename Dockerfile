@@ -24,4 +24,8 @@ RUN cd ${NORM_DIR} && ./waf install
 
 # Step 4: expose
 COPY ./docker/run.sh /usr/bin/run-norm-example
+
+# Step 5: run the examples unprivileged (NORM uses unprivileged UDP ports)
+RUN useradd --system --no-create-home --shell /usr/sbin/nologin norm
+USER norm
 ENTRYPOINT [ "run-norm-example" ]

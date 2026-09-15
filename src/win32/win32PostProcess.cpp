@@ -236,13 +236,27 @@ bool Win32PostProcessor::ProcessFile(const char *path)
     Kill();
 
     // Construct the command line
+    // Append each argument and a space, then the path, never past the buffer.
+    // (This used to strcat into the "%s " literal, which faults, and dropped
+    // the arguments entirely.)
     char args[PATH_MAX+512];
     args[0] = '\0';
+    size_t argsLen = 0;
     for (unsigned int i = 1; i < process_argc; i++)
     {
-        strcat("%s ", process_argv[i]);
+        int n = _snprintf_s(args + argsLen, sizeof(args) - argsLen, _TRUNCATE, "%s ", process_argv[i]);
+        if (n < 0)
+        {
+            PLOG(PL_ERROR, "Win32PostProcessor::ProcessFile() error: post processor arguments too long\n");
+            return false;
+        }
+        argsLen += (size_t)n;
     }
-    strcat(args, path);	
+    if (_snprintf_s(args + argsLen, sizeof(args) - argsLen, _TRUNCATE, "%s", path) < 0)
+    {
+        PLOG(PL_ERROR, "Win32PostProcessor::ProcessFile() error: post processor command line too long\n");
+        return false;
+    }
 
 #ifdef _UNICODE
     wchar_t cmdBuffer[PATH_MAX];
