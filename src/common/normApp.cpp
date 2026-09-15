@@ -8,6 +8,8 @@
 
 #include <random>
 #include <cstdint>
+#include <cerrno>
+#include <climits>
 #include "protokit.h"
 #include "normSession.h"
 #include "normPostProcess.h"
@@ -499,6 +501,34 @@ void NormApp::OnControlEvent(ProtoSocket& /*theSocket*/, ProtoSocket::Event theE
     }
 }  // end NormApp::OnControlEvent()
     
+// Parse a whole decimal command-line value into [minValue, maxValue].
+// atoi has undefined behaviour on overflow and silently turns garbage into
+// 0, and several of the values below size buffers or index into them.
+static bool ParseLongArg(const char* val, long minValue, long maxValue, long& out)
+{
+    if ((NULL == val) || ('\0' == *val)) return false;
+    char* end = NULL;
+    errno = 0;
+    long v = strtol(val, &end, 10);
+    if ((0 != errno) || (end == val) || ('\0' != *end)) return false;
+    if ((v < minValue) || (v > maxValue)) return false;
+    out = v;
+    return true;
+}
+
+static bool ParseIntArg(const char* val, int minValue, int maxValue, int& out)
+{
+    long v;
+    if (!ParseLongArg(val, minValue, maxValue, v)) return false;
+    out = (int)v;
+    return true;
+}
+
+// The test message is written into input_buffer: its "NORM Test Msg %08u "
+// header (plus the 2-byte length prefix when messaging) must fit, and so must
+// the whole message.
+static const int MSG_TEST_MIN_LENGTH = 32;
+
 bool NormApp::OnCommand(const char* cmd, const char* val)
 {
     CmdType type = CommandType(cmd);
@@ -548,7 +578,8 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     if (!strncmp("debug", cmd, len))
     {
         
-        int debugLevel = atoi(val);
+        int debugLevel = -1;
+        if (!ParseIntArg(val, 0, 12, debugLevel)) debugLevel = -1;
         if ((debugLevel < 0) || (debugLevel > 12))
         {
             PLOG(PL_FATAL, "NormApp::OnCommand(segment) invalid debug level!\n");   
@@ -623,7 +654,8 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
             return false;
         }
         *ptr++ = '\0';
-        int portNum = atoi(ptr);
+        int portNum = 0;
+        if (!ParseIntArg(ptr, 1, 65535, portNum)) portNum = 0;
         if ((portNum < 1) || (portNum > 65535))
         {
             delete[] address;
@@ -635,7 +667,8 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }
     else if (!strncmp("txport", cmd, len))
     {
-        int txPort = atoi(val);
+        int txPort = -1;
+        if (!ParseIntArg(val, 0, 65535, txPort)) txPort = -1;
         if ((txPort < 0) || (txPort > 65535))
         {
             PLOG(PL_FATAL, "NormApp::OnCommand(txport) invalid port number!\n");   
@@ -646,7 +679,8 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }
     else if (!strncmp("ttl", cmd, len))
     {
-        int ttlTemp = atoi(val);
+        int ttlTemp = -1;
+        if (!ParseIntArg(val, 0, 255, ttlTemp)) ttlTemp = -1;
         if ((ttlTemp < 0) || (ttlTemp > 255))
         {
             PLOG(PL_FATAL, "NormApp::OnCommand(ttl) invalid value!\n");   
@@ -800,8 +834,15 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }
     else if (!strncmp("stest", cmd, len))
     {
+        int length;
+        if (!ParseIntArg(val, MSG_TEST_MIN_LENGTH, MSG_BUFFER_SIZE, length))
+        {
+            PLOG(PL_FATAL, "NormApp::OnCommand(stest) message length must be %d..%d\n",
+                 MSG_TEST_MIN_LENGTH, (int)MSG_BUFFER_SIZE);
+            return false;
+        }
         msg_test = true;
-        msg_test_length = atoi(val);
+        msg_test_length = (unsigned int)length;
         input_messaging = false;
     }
     else if (!strncmp("minput", cmd, len))
@@ -842,14 +883,28 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }
     else if (!strncmp("mtest", cmd, len))
     {
+        int length;
+        // Messaging prefixes each message with a 16-bit length.
+        if (!ParseIntArg(val, MSG_TEST_MIN_LENGTH, MSG_BUFFER_SIZE, length))
+        {
+            PLOG(PL_FATAL, "NormApp::OnCommand(mtest) message length must be %d..%d\n",
+                 MSG_TEST_MIN_LENGTH, (int)MSG_BUFFER_SIZE);
+            return false;
+        }
         msg_test = true;
-        msg_test_length = atoi(val);
+        msg_test_length = (unsigned int)length;
         input_messaging = true;
     }
     else if (!strncmp("obuf", cmd, len))
     {
+        int bufsize;
+        if (!ParseIntArg(val, 1, 64 * 1024 * 1024, bufsize))
+        {
+            PLOG(PL_FATAL, "NormApp::OnCommand(obuf) buffer size must be 1..%d\n", 64 * 1024 * 1024);
+            return false;
+        }
         if (NULL != output_io_buffer) delete[] output_io_buffer;
-        output_io_bufsize = atoi(val);
+        output_io_bufsize = (unsigned int)bufsize;
         if (NULL == (output_io_buffer = new char[output_io_bufsize]))
         {
             PLOG(PL_FATAL, "NormApp::OnCommand(obuf): error allocating buffer: %s\n",
@@ -895,7 +950,13 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }    
     else if (!strncmp("repeatcount", cmd, len))
     {
-        tx_repeat_count = atoi(val);  
+        int repeatcountParsed;
+        if (!ParseIntArg(val, -1, INT_MAX, repeatcountParsed))
+        {
+            PLOG(PL_FATAL, "NormApp::OnCommand(repeatcount) invalid value!\n");
+            return false;
+        }
+        tx_repeat_count = repeatcountParsed;  
     }
     else if (!strncmp("rinterval", cmd, len))
     {
@@ -911,7 +972,13 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }       
     else if (!strncmp("requeue", cmd, len))
     {
-        tx_requeue = tx_requeue_count = atoi(val); 
+        int requeueParsed;
+        if (!ParseIntArg(val, -1, INT_MAX, requeueParsed))
+        {
+            PLOG(PL_FATAL, "NormApp::OnCommand(requeue) invalid value!\n");
+            return false;
+        }
+        tx_requeue = tx_requeue_count = requeueParsed; 
     } 
     else if (!strncmp("boundary", cmd, len))
     {
@@ -978,7 +1045,13 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }
     else if (!strncmp("id", cmd, len))
     {
-        node_id = atoi(val);
+        long id;
+        if (!ParseLongArg(val, 0, (long)UINT32_MAX, id))
+        {
+            PLOG(PL_FATAL, "NormApp::OnCommand(id) invalid node id!\n");
+            return false;
+        }
+        node_id = (UINT32)id;
     }
     else if (!strncmp("rxcachedir", cmd, len))
     {
@@ -1000,7 +1073,8 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }
     else if (!strncmp("segment", cmd, len))
     {
-        int segmentSize = atoi(val);
+        int segmentSize = -1;
+        if (!ParseIntArg(val, 0, 65535, segmentSize)) segmentSize = -1;
         if ((segmentSize < 0) || (segmentSize > 65535))
         {
             PLOG(PL_FATAL, "NormApp::OnCommand(segment) invalid segment size!\n");   
@@ -1010,7 +1084,8 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }
     else if (!strncmp("block", cmd, len))
     {
-        int blockSize = atoi(val);
+        int blockSize = -1;
+        if (!ParseIntArg(val, 1, 65535, blockSize)) blockSize = -1;
         if ((blockSize < 1) || (blockSize > 65535))
         {
             PLOG(PL_FATAL, "NormApp::OnCommand(block) invalid block size!\n");   
@@ -1020,7 +1095,8 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }
     else if (!strncmp("parity", cmd, len))
     {
-        int numParity = atoi(val);
+        int numParity = -1;
+        if (!ParseIntArg(val, 0, 65534, numParity)) numParity = -1;
         if ((numParity < 0) || (numParity > 65534))
         {
             PLOG(PL_FATAL, "NormApp::OnCommand(parity) invalid value!\n");   
@@ -1030,7 +1106,8 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }
     else if (!strncmp("auto", cmd, len))
     {
-        int autoParity = atoi(val);
+        int autoParity = -1;
+        if (!ParseIntArg(val, 0, 65534, autoParity)) autoParity = -1;
         if ((autoParity < 0) || (autoParity > 65534))
         {
             PLOG(PL_FATAL, "NormApp::OnCommand(auto) invalid value!\n");   
@@ -1041,7 +1118,8 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }
     else if (!strncmp("extra", cmd, len))
     {
-        int extraParity = atoi(val);
+        int extraParity = -1;
+        if (!ParseIntArg(val, 0, 65534, extraParity)) extraParity = -1;
         if ((extraParity < 0) || (extraParity > 65534))
         {
             PLOG(PL_FATAL, "NormApp::OnCommand(extra) invalid value!\n");   
@@ -1126,7 +1204,13 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }
     else if (!strncmp("txrobustfactor", cmd, len))
     {
-        tx_robust_factor = atoi(val);
+        int txrobustfactorParsed;
+        if (!ParseIntArg(val, -1, INT_MAX, txrobustfactorParsed))
+        {
+            PLOG(PL_FATAL, "NormApp::OnCommand(txrobustfactor) invalid value!\n");
+            return false;
+        }
+        tx_robust_factor = txrobustfactorParsed;
         if (session) session->SetTxRobustFactor(tx_robust_factor);
     }
     else if (!strncmp("rxbuffer", cmd, len))
@@ -1187,7 +1271,13 @@ bool NormApp::OnCommand(const char* cmd, const char* val)
     }
     else if (!strncmp("rxrobustfactor", cmd, len))
     {
-        rx_robust_factor = atoi(val);
+        int rxrobustfactorParsed;
+        if (!ParseIntArg(val, -1, INT_MAX, rxrobustfactorParsed))
+        {
+            PLOG(PL_FATAL, "NormApp::OnCommand(rxrobustfactor) invalid value!\n");
+            return false;
+        }
+        rx_robust_factor = rxrobustfactorParsed;
         if (session) session->SetRxRobustFactor(rx_robust_factor);
     }
     else if (!strncmp("rxpersist", cmd, len))

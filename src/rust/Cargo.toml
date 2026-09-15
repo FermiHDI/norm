@@ -13,4 +13,4 @@ repository = "https://github.com/USNavalResearchLaboratory/norm"
 
 [workspace.dependencies]
 norm-sys = { path = "norm-sys", version = "1.5.10" }
-rand = "0.8"
+rand = "0.10"

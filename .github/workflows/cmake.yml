@@ -1,6 +1,10 @@
 name: CMake build
 
-on: [push, pull_request]
+# Every workflow in the FermiHDI repositories runs on demand only: no push,
+# pull-request or merge trigger. Start a run from the Actions tab or with
+# `gh workflow run <file>`.
+on:
+  workflow_dispatch:
 
 env:
   CMAKE_VERSION: 3.16.2
