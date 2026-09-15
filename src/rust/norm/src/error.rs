@@ -88,17 +88,22 @@ impl StdError for Error {}
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Helper function to convert a C string to a Rust string result
-pub(crate) fn c_string_to_string(c_str: *const libc::c_char) -> Result<String> {
+///
+/// # Safety
+///
+/// `c_str` must be null or point to a NUL-terminated string that stays valid
+/// for the duration of the call. A non-null dangling pointer is undefined
+/// behaviour, which is why this cannot be a safe function.
+pub(crate) unsafe fn c_string_to_string(c_str: *const libc::c_char) -> Result<String> {
     if c_str.is_null() {
         return Err(Error::NullPointer);
     }
 
-    unsafe {
-        let c_str = std::ffi::CStr::from_ptr(c_str);
-        c_str.to_str()
-            .map(|s| s.to_owned())
-            .map_err(|_| Error::StringConversionError)
-    }
+    // SAFETY: non-null, and the caller guarantees a valid NUL-terminated string.
+    let c_str = unsafe { std::ffi::CStr::from_ptr(c_str) };
+    c_str.to_str()
+        .map(|s| s.to_owned())
+        .map_err(|_| Error::StringConversionError)
 }
 
 /// Helper function to convert a Rust string to a C string result

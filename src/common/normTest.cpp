@@ -9,10 +9,27 @@
 
 #include <stdio.h>
 #include <stdlib.h>  // for srand()
+#include <errno.h>
+#include <limits.h>
 
 #ifdef UNIX
 #include <unistd.h>  // for "sleep()"
 #endif // UNIX
+
+// Parse the value after argv[i] as an int: the argument must exist and be a
+// whole number in range, so "debug" at the end of the line or "smax 99999999999"
+// can neither read past argv nor overflow. Advances i on success.
+static bool ParseIntArg(int argc, char* argv[], int& i, int& value)
+{
+    if (i + 1 >= argc) return false;
+    char* end = NULL;
+    errno = 0;
+    long v = strtol(argv[i + 1], &end, 10);
+    if (end == argv[i + 1] || *end != '\0' || errno == ERANGE || v < INT_MIN || v > INT_MAX) return false;
+    value = (int)v;
+    i++;
+    return true;
+}
 
 int main(int argc, char* argv[])
 {
@@ -23,6 +40,7 @@ int main(int argc, char* argv[])
     int debugLevel = 2;
     double loss = 0.0;
     int sendMax = 3000;//-1;    // -1 means unlimited
+    int debugLevelValue = 0, lossValue = 0, sendMaxValue = 0;  // parsed option values
     const char* cmd = NULL;
     
     
@@ -47,15 +65,30 @@ int main(int argc, char* argv[])
         }
         else if (!strcmp(argv[i], "debug"))
         {
-            debugLevel = atoi(argv[++i]);
+            if (!ParseIntArg(argc, argv, i, debugLevelValue))
+            {
+                fprintf(stderr, "normTest: \"debug\" needs an integer value\n");
+                return -1;
+            }
+            debugLevel = debugLevelValue;
         }
         else if (!strcmp(argv[i], "loss"))
         {
-            loss = (double)atoi(argv[++i]);
+            if (!ParseIntArg(argc, argv, i, lossValue))
+            {
+                fprintf(stderr, "normTest: \"loss\" needs an integer value\n");
+                return -1;
+            }
+            loss = (double)lossValue;
         }
         else if (!strcmp(argv[i], "smax"))
         {
-            sendMax = atoi(argv[++i]);
+            if (!ParseIntArg(argc, argv, i, sendMaxValue))
+            {
+                fprintf(stderr, "normTest: \"smax\" needs an integer value\n");
+                return -1;
+            }
+            sendMax = sendMaxValue;
         }
         else if (!strcmp(argv[i], "cmd"))
         {

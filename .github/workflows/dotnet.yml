@@ -14,12 +14,13 @@ jobs:
         working-directory: ./src/dotnet
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
+        persist-credentials: false
         submodules: recursive
     
     - name: Setup Python
-      uses: actions/setup-python@v5.1.0
+      uses: actions/setup-python@82c7e631bb3cdc910f68e0081d67478d79c6982d # v5.1.0
       with:
         python-version: 3.x
     - name: Build NORM
@@ -27,9 +28,9 @@ jobs:
       working-directory: .
         
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
       with:
-        dotnet-version: 6.0.x
+        dotnet-version: '10.0.x'
     - name: Restore dependencies
       run: dotnet restore /property:Configuration=Release
     - name: Build
@@ -37,13 +38,13 @@ jobs:
     - name: Test
       run: dotnet test --no-build --verbosity normal --configuration Release --logger trx --results-directory TestResults
     - name: Upload test results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: dotnet-results
         path: ./src/dotnet/TestResults
       if: ${{ always() }}
     - name: Publish test results
-      uses: EnricoMi/publish-unit-test-result-action@v2
+      uses: EnricoMi/publish-unit-test-result-action@d0a4676d0e0b938bc201470d88276b7c74c712b3 # v2.24.0
       with:
         files: ./src/dotnet/TestResults/*.trx
       if: ${{ always() }}

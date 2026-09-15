@@ -570,7 +570,8 @@ bool NormDirectoryIterator::GetNextFile(char* fileName)
 		{
 			// Construct search string
 			current->GetFullName(fileName);
-			strcat(fileName, "\\*");
+			if (strlen(fileName) + 2 >= PATH_MAX) return false;  // no room for "\\*"
+			strncat(fileName, "\\*", PATH_MAX - strlen(fileName) - 1);
 #ifdef _UNICODE
             wchar_t wideBuffer[MAX_PATH];
             mbstowcs(wideBuffer, fileName, MAX_PATH);
@@ -618,7 +619,8 @@ bool NormDirectoryIterator::GetNextFile(char* fileName)
 				}
 			}
 			current->GetFullName(fileName);
-			strcat(fileName, ptr);
+			if (strlen(fileName) + strlen(ptr) >= PATH_MAX) continue;  // name would not fit
+			strncat(fileName, ptr, PATH_MAX - strlen(fileName) - 1);
 			NormFile::Type type = NormFile::GetType(fileName);
 			if (NormFile::NORMAL == type)
 			{
@@ -686,7 +688,8 @@ bool NormDirectoryIterator::GetNextFile(char* fileName)
             }
         }
         current->GetFullName(fileName);
-        strcat(fileName, dp->d_name);
+        if (strlen(fileName) + strlen(dp->d_name) >= PATH_MAX) continue;  // name would not fit
+        strncat(fileName, dp->d_name, PATH_MAX - strlen(fileName) - 1);
         NormFile::Type type = NormFile::GetType(fileName);        
         if (NormFile::NORMAL == type)
         {
