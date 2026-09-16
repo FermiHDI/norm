@@ -1,0 +1,39 @@
+# .aikido — FermiHDI repo-level scan configuration.
+# Docs: https://help.aikido.dev/code-scanning/scanning-practices/ignore-via-code-with-aikido-files
+#
+# Path matching is plain substring inclusion (no globs/regex): if the value
+# appears anywhere in a file's path, that file is excluded from secrets,
+# SAST, lockfile and code-quality scanning.
+
+exclude:
+  paths:
+    # Vendored/third-party source, not ours to fix.
+    - vendor/
+    - node_modules/
+    - third_party_licenses/
+    # Nested git submodules: FermiHDI's own shared libraries, but each one
+    # already has its own repo and its own Aikido scan. Scanning them again
+    # here just duplicates every finding across every consumer.
+    - submodules/
+    - protolib/
+    # Build output and local scratch, never committed intentionally.
+    - build/
+    - build_asan/
+    - build_tsan/
+    - build_hre/
+    - build_ops/
+    - build_tests/
+    - build_ut/
+    - dist/
+    - prebuilt/
+    - .terraform/
+
+# CVE-level findings this repo has reviewed and decided not to act on.
+# Add one entry per CVE, each with the reason a human actually decided --
+# never blank. Aikido's dashboard shows the ignore with this file as the
+# reference.
+#
+# ignore:
+#   cves:
+#     CVE-2026-XXXXX:
+#       reason: <why this doesn't apply here>
