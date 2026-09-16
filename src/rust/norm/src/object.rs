@@ -120,6 +120,14 @@ impl Object {
         }
 
         let size = self.size() as usize;
+        // SAFETY: NormDataAccessData returns the data object's own buffer
+        // pointer, valid for `size` bytes for as long as the object holds it.
+        // The returned slice borrows `&self`, so the borrow checker keeps this
+        // Object (and therefore NormObjectRelease on Drop) alive for the
+        // slice's lifetime. This crate never calls NormDataDetachData, the
+        // only NORM API that can invalidate this pointer out from under a
+        // live handle, so nothing reachable through this crate's safe API can
+        // free or move the buffer while the slice exists.
         let data_slice = unsafe { slice::from_raw_parts(data_ptr as *const u8, size) };
         Ok(data_slice)
     }

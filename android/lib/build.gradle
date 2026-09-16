@@ -1,5 +1,14 @@
 apply plugin: 'com.android.library'
 
+// Locks every resolvable configuration's dependency versions. No lockfiles
+// exist yet: run `./gradlew :lib:dependencies --write-locks` (needs a JDK
+// Gradle 7.4.2 supports -- JDK 17, not the class-file-major-version-69 JDK
+// this repo's CI otherwise uses -- plus the Android SDK/NDK) to generate
+// gradle.lockfile once, then commit it.
+dependencyLocking {
+    lockAllConfigurations()
+}
+
 android {
     compileSdkVersion 34
     externalNativeBuild {
